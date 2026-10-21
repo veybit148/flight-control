@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    container_name: postgis_db
+    environment:
+      - POSTGRES_USER=weflythose
+      - POSTGRES_PASSWORD=12345
+      - POSTGRES_DB=flight_control
+
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql
+
+volumes:
+  postgis_data:

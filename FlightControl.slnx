@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="FlightControl.Api/FlightControl.Api.csproj" />
+  <Project Path="FlightControl.Dal/FlightControl.Dal.csproj" />
+  <Project Path="FlightControl.Domain/FlightControl.Domain.csproj" />
+  <Project Path="FlightControl.Dto/FlightControl.Dto.csproj" />
+  <Project Path="FlightControl.Repository/FlightControl.Repository.csproj" />
+  <Project Path="FlightControl.Tests/FlightControl.Tests.csproj" />
+  <Project Path="FlightControl.Validation/FlightControl.Validation.csproj" />
+</Solution>
