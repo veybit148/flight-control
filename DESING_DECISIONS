@@ -1,0 +1,19 @@
+# Design Decisions
+
+Places where this project intentionally deviates from the original task document, and why.
+
+## 1. Unit of Work instead of a save method on the base repository
+
+**Date:** 2026-10-22
+
+**Decision:** Saving changes is done through a separate `IUnitOfWork` with a single `SaveChangesAsync` method. Repositories only mark changes; they never save.
+
+**Reason:** Saving must be triggered by the Operation, so that several changes made in one request are written together or not at all. A `SaveChangesAsync` method on every repository would work, but it is misleading: `_aircraftRepository.SaveChangesAsync()` reads as "save the aircraft", while it actually saves every pending change in the request. A separate Unit of Work makes this explicit, at the cost of only one interface, one class and one DI registration.
+
+## 2. `Add` instead of `AddAsync`
+
+**Date:** 2026-10-22
+
+**Decision:** `IBaseRepository<T>.Add` is synchronous, like `Update` and `Delete`.
+
+**Reason:** Adding an entity does not hit the database; it only marks the entity as added in the change tracker. EF Core's `AddAsync` exists only for value generators that need a database round trip to produce keys. Our IDs are generated in code with `Guid.CreateVersion7()`, so that case never happens and the async version adds nothing.

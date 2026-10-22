@@ -1,4 +1,6 @@
 using FlightControl.Dal;
+using FlightControl.Repository.Interfaces;
+using FlightControl.Repository;
 using Microsoft.EntityFrameworkCore;
 
 
@@ -16,8 +18,9 @@ var connectionString =
         + "'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 
 
