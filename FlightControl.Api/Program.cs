@@ -2,6 +2,7 @@ using FlightControl.Dal;
 using FlightControl.Repository.Interfaces;
 using FlightControl.Repository;
 using Microsoft.EntityFrameworkCore;
+using FlightControl.Api.Middleware;
 
 
 
@@ -14,7 +15,7 @@ builder.Services.AddSwaggerGen();
 
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string"
+        ?? throw new InvalidOperationException("Connection string "
         + "'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -27,12 +28,16 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 var app = builder.Build();
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+
 
 app.UseHttpsRedirection();
 app.MapControllers();
