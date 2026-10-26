@@ -5,6 +5,7 @@ namespace FlightControl.Dal;
 
 public class AppDbContext : DbContext
 {
+    public DbSet<User> Users => Set<User>();
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
@@ -14,6 +15,7 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.HasPostgresExtension("postgis");
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

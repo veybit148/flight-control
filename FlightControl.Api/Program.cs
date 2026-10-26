@@ -3,7 +3,12 @@ using FlightControl.Repository.Interfaces;
 using FlightControl.Repository;
 using Microsoft.EntityFrameworkCore;
 using FlightControl.Api.Middleware;
-
+using FlightControl.Repository.Repositories;
+using Microsoft.AspNetCore.Identity;
+using FlightControl.Dal.Entities;
+using FlightControl.Validation.Core;
+using FlightControl.Validation.Validators.Users;
+using FlightControl.Dto.Users;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,7 +27,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 
 
 
