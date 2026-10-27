@@ -9,6 +9,8 @@ using FlightControl.Dal.Entities;
 using FlightControl.Validation.Core;
 using FlightControl.Validation.Validators.Users;
 using FlightControl.Dto.Users;
+using FlightControl.Domain.Security;
+using FlightControl.Domain.Operations.Auth;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,8 +31,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddSingleton<IPasswordService, PasswordService>(); 
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
-
+builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 
 
 var app = builder.Build();
