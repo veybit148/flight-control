@@ -11,5 +11,13 @@ public abstract class AbstractValidator<T>
         return result;
     }
 
-    protected abstract void ValidateRules(T instance, ValidationResult result);    
+    public void ThrowIfInvalid(T instance)
+    {
+        ValidationResult validationResult = Validate(instance);
+        if(!validationResult.IsValid) throw new ValidationException(validationResult);
+    }  
+
+    protected abstract void ValidateRules(T instance, ValidationResult result); 
+
+
 }

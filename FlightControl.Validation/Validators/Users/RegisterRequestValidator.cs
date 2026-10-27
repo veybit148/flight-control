@@ -55,7 +55,7 @@ public partial class RegisterRequestValidator: AbstractValidator<RegisterRequest
 
         if(!Enum.IsDefined(instance.Role))
         {
-            result.AddError(nameof(instance.Role), "Wrong role type");
+            result.AddError(nameof(instance.Role), "Role must be one of: Pilot, FleetOwner, Military.");
         }
     }
 }
