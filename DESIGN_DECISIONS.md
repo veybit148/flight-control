@@ -38,7 +38,7 @@ Design decisions made in this project, including places where it intentionally d
 
 **Date:** 2026-10-27
 
-**Decision:** Every email is trimmed and lowercased with `ToLowerInvariant()` before it is checked for existence, stored, or used to look up a user. Every path that writes or reads emails (registration, login, seed data) must follow this rule.
+**Decision:** Every email is trimmed and lowercased with `ToLowerInvariant()` before it is checked for existence, stored, or used to look up a user. Every path that writes or reads emails (registration, login, seed data) must follow this rule. The rule lives in one place, `EmailNormalizer.Normalize`.
 
 **Reason:** The unique index on `Email` is case-sensitive, so without normalization `Ali@mail.com` and `ali@mail.com` would be two different accounts. `ToLowerInvariant()` is used instead of `ToLower()` because the latter depends on the machine's culture: on a Turkish system, `I` becomes `ı`. Lowercasing inside the query (`u.Email.ToLower() == email`) was rejected because it prevents the database from using the index.
 
@@ -67,3 +67,35 @@ Design decisions made in this project, including places where it intentionally d
 **Decision:** ASP.NET Core's automatic model validation (`[ApiController]`) stays enabled alongside our own validators.
 
 **Reason:** The framework handles structural problems (missing fields, wrong types, malformed JSON) before the request reaches the controller. Our validators handle business rules on a well-formed request. The accepted trade-off: a request with a missing field gets only the framework's errors first, and the two 400 responses differ slightly in format (the framework's includes `type` and `traceId`).
+
+## 9. Secrets kept out of the repository
+
+**Date:** 2026-10-30
+
+**Decision:** The connection string and the seed credentials are read from configuration, never from committed files. During development they live in .NET User Secrets; in other environments they are provided as environment variables (for example `ConnectionStrings__DefaultConnection`). Docker Compose reads the database credentials from a `.env` file, which is ignored by Git; a `.env.example` with placeholder values is committed instead. The database port is bound to `127.0.0.1` only.
+
+**Reason:** Anything committed stays in the Git history, even after it is removed from the file. The original development password had already been committed, so it was replaced rather than only moved. Binding the port to `127.0.0.1` keeps the database unreachable from other machines on the same network.
+
+## 10. Authority account seeded on startup
+
+**Date:** 2026-10-30
+
+**Decision:** The first authority account is created by `AuthoritySeeder` (in Domain), which `Program.cs` runs after `Build()` and before `Run()`, inside a manually created DI scope. `Program.cs` reads the email and password from configuration and passes them as parameters, so Domain does not depend on the configuration system. The seeder uses the same building blocks as registration: `EmailNormalizer`, `IUserRepository`, `IPasswordService` and `IUnitOfWork`. It does nothing if any authority already exists, refuses to continue (with a warning) if the email belongs to a non-authority user, and the application starts without an authority (with a warning) if the configuration values are missing.
+
+**Reason:**
+
+- Registration cannot create authority accounts by design, so the first one needs a separate path.
+- Credentials must not be in the code.
+- EF Core's migration-based seeding (`HasData`) requires fixed values, which does not fit generated IDs, timestamps and password hashes with a random salt; seeding at runtime avoids this.
+- Running before `Run()` means the authority exists before the first request is accepted, so on a fresh deployment nobody can register the authority's email first.
+- The seeder never upgrades an existing user to authority. Someone who registers the authority's email in advance can block the seed, but cannot gain authority rights.
+
+**Consequence:** The application now needs the database at startup. If the database is unreachable, startup fails instead of the first request.
+
+## 11. Registration reveals existing emails (accepted risk)
+
+**Date:** 2026-10-30
+
+**Decision:** Registering with an email that is already in use returns 409 with "This email is already in use."
+
+**Reason:** This allows user enumeration: anyone can check whether an email is registered. The usual fix is a verification flow in which registration always returns the same response and the details are sent to the email address itself; this needs email infrastructure, which is outside the scope of this project. Rate limiting on the registration endpoint could make enumeration slower later. Login must not repeat this: an unknown email and a wrong password will return the same response.

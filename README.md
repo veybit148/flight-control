@@ -33,7 +33,18 @@ The connection string is not stored in the repository. Add it to User Secrets, u
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=<POSTGRES_DB>;Username=<POSTGRES_USER>;Password=<POSTGRES_PASSWORD>" --project FlightControl.Api
 ```
 
-### 3. Run
+### 3. Authority account
+
+The first authority account is created on startup from configuration. Add its credentials to User Secrets:
+
+```bash
+dotnet user-secrets set "Seed:AuthorityEmail" "<email>" --project FlightControl.Api
+dotnet user-secrets set "Seed:AuthorityPassword" "<password>" --project FlightControl.Api
+```
+
+If these are missing, the application starts without an authority account and logs a warning.
+
+### 4. Run
 
 ```bash
 docker compose up -d

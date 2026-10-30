@@ -1,6 +1,7 @@
 
 using FlightControl.Dal;
 using FlightControl.Dal.Entities;
+using FlightControl.Dal.Enums;
 using FlightControl.Repository.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,11 @@ public class UserRepository: BaseRepository<User>, IUserRepository
     public async Task<bool> ExistsByEmailAsync(string email)
     {
         return await _dbSet.AnyAsync(u => u.Email == email);
+    }
+
+    public async Task<bool> ExistsByRoleAsync(UserRole role)
+    {
+        return await _dbSet.AnyAsync(u => u.Role == role);
     }
 
 }

@@ -2,6 +2,7 @@ using FlightControl.Dal.Entities;
 using FlightControl.Domain.Exceptions;
 using FlightControl.Domain.Mappings;
 using FlightControl.Domain.Security;
+using FlightControl.Domain.Common;
 using FlightControl.Dto.Users;
 using FlightControl.Repository.Interfaces;
 using FlightControl.Validation.Core;
@@ -30,9 +31,9 @@ public class AuthOperation : IAuthOperation
     public async Task<UserResponse> RegisterAsync(RegisterRequest request)
     {
         _validator.ThrowIfInvalid(request);
-            
+
         RegisterRequest normalizedRequest = 
-        request with {Email = request.Email.Trim().ToLowerInvariant()};
+        request with {Email = EmailNormalizer.Normalize(request.Email)};
 
         if(await _repository.ExistsByEmailAsync(normalizedRequest.Email))
         {
