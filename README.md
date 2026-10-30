@@ -14,6 +14,28 @@ Docker **must** be running
 git clone https://github.com/veybit148/flight-control.git
 cd flight-control
 dotnet tool restore
+```
+
+### 1. Database settings
+Copy the example environment file and fill in your own values:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell, use `Copy-Item .env.example .env`.
+
+### 2. Connection string
+
+The connection string is not stored in the repository. Add it to User Secrets, using the same user, password and database name as in `.env`:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=<POSTGRES_DB>;Username=<POSTGRES_USER>;Password=<POSTGRES_PASSWORD>" --project FlightControl.Api
+```
+
+### 3. Run
+
+```bash
 docker compose up -d
 dotnet ef database update -p FlightControl.Dal -s FlightControl.Api
 dotnet run --project FlightControl.Api
