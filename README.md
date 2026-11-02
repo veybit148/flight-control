@@ -44,7 +44,31 @@ dotnet user-secrets set "Seed:AuthorityPassword" "<password>" --project FlightCo
 
 If these are missing, the application starts without an authority account and logs a warning.
 
-### 4. Run
+### 4. JWT signing key
+
+Access tokens are signed with a secret key of at least 32 bytes. Generate a random one:
+
+```powershell
+# Windows PowerShell
+$bytes = New-Object byte[] 64
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+```
+
+```bash
+# Linux / macOS
+openssl rand -base64 64
+```
+
+Add it to User Secrets:
+
+```bash
+dotnet user-secrets set "Jwt:SigningKey" "<generated key>" --project FlightControl.Api
+```
+
+If the key is missing or too short, the application does not start.
+
+### 5. Run
 
 ```bash
 docker compose up -d

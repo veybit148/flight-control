@@ -12,6 +12,10 @@ using FlightControl.Dto.Users;
 using FlightControl.Domain.Security;
 using FlightControl.Domain.Operations.Auth;
 using FlightControl.Domain.Seeding;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,6 +40,47 @@ builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 builder.Services.AddScoped<AuthoritySeeder>();
+builder.Services.AddSingleton<ITokenService, TokenService>();
+
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer), "Issuer can't be null or empty.")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Audience), "Audience can't be null or empty.")
+    .Validate(o => Encoding.UTF8.GetBytes(o.SigningKey).Length >= 32, "Key must be longer than 256 bits(32 bytes).")
+    .Validate(o => o.AccessTokenMinutes >= 1 
+    && o.AccessTokenMinutes <= 20160, "Access time must be between 1 and 20160 minutes.")
+    .ValidateOnStart();
+
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Configuration section 'Jwt' is missing.");
+
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOptions.Issuer,
+
+            ValidateAudience = true,
+            ValidAudience = jwtOptions.Audience,
+
+            ValidateLifetime = true,
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+
+            RoleClaimType = "role",
+            NameClaimType = JwtRegisteredClaimNames.Sub,
+
+            ClockSkew = TimeSpan.FromSeconds(60)
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 
 var app = builder.Build();
@@ -55,7 +100,9 @@ else
     await seeder.SeedAsync(seedEmail, seedPassword);
 }
 
+
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -64,9 +111,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-
-
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 
