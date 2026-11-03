@@ -16,14 +16,30 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.OpenApi;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddControllers();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste the access token from the login response."
+    });
 
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+    });
+});
 
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
@@ -38,6 +54,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>(); 
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 builder.Services.AddScoped<AuthoritySeeder>();
 builder.Services.AddSingleton<ITokenService, TokenService>();

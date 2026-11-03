@@ -6,31 +6,41 @@ using FlightControl.Domain.Common;
 using FlightControl.Dto.Users;
 using FlightControl.Repository.Interfaces;
 using FlightControl.Validation.Core;
+using System.Data.Common;
+using Microsoft.AspNetCore.Identity;
+using RTools_NTS.Util;
 
 namespace FlightControl.Domain.Operations.Auth;
 
 public class AuthOperation : IAuthOperation
 {
-    private readonly AbstractValidator<RegisterRequest> _validator;
+    private readonly AbstractValidator<RegisterRequest> _registerValidator;
+    private readonly AbstractValidator<LoginRequest> _loginValidator;
+
     private readonly IUserRepository _repository;
     private readonly IPasswordService _passwordService;
+    private readonly ITokenService _tokenService;
     private readonly IUnitOfWork _unitOfWork;
 
     public AuthOperation(
-        AbstractValidator<RegisterRequest> validator,
+        AbstractValidator<RegisterRequest> registerValidator,
+        AbstractValidator<LoginRequest> loginValidator,
         IUserRepository repository,
         IPasswordService passwordService,
+        ITokenService tokenService,
         IUnitOfWork unitOfWork)
     {
-        _validator = validator;
+        _registerValidator = registerValidator;
+        _loginValidator = loginValidator;
         _repository = repository;
         _passwordService = passwordService;
+        _tokenService = tokenService;
         _unitOfWork = unitOfWork;
     }
 
     public async Task<UserResponse> RegisterAsync(RegisterRequest request)
     {
-        _validator.ThrowIfInvalid(request);
+        _registerValidator.ThrowIfInvalid(request);
 
         RegisterRequest normalizedRequest = 
         request with {Email = EmailNormalizer.Normalize(request.Email)};
@@ -38,7 +48,7 @@ public class AuthOperation : IAuthOperation
         if(await _repository.ExistsByEmailAsync(normalizedRequest.Email))
         {
             throw new ConflictException("This email is already in use.");
-        }   
+        }
 
         string hashedPassword = _passwordService.HashPassword(request.Password);
 
@@ -49,5 +59,32 @@ public class AuthOperation : IAuthOperation
         await _unitOfWork.SaveChangesAsync();
 
         return user.ToResponse();
+    }
+
+    public async Task<LoginResponse> LoginAsync(LoginRequest request)
+    {
+        _loginValidator.ThrowIfInvalid(request);
+        
+        LoginRequest normalizedRequest = 
+        request with {Email = EmailNormalizer.Normalize(request.Email)};
+        
+        User? user = await _repository.GetByEmailAsync(normalizedRequest.Email);
+        
+        if(user == null)
+        {
+            _passwordService.VerifyPassword(null, request.Password);
+            throw new InvalidCredentialsException("Invalid Email or Password.");
+        }
+
+
+        if(!_passwordService.VerifyPassword(user.PasswordHash, request.Password))
+        {
+            throw new InvalidCredentialsException("Invalid Email or Password.");            
+        }
+
+        AccessToken token = _tokenService.GenerateToken(user.Id, user.Role);
+        LoginResponse response = user.ToResponse().ToLoginResponse(token.Token, token.ExpiresAt);
+        
+        return response;
     }
 }

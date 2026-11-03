@@ -5,4 +5,5 @@ namespace FlightControl.Domain.Operations.Auth;
 public interface IAuthOperation
 {
     public Task<UserResponse> RegisterAsync(RegisterRequest request);
+    public Task<LoginResponse> LoginAsync(LoginRequest request);
 }

@@ -31,7 +31,7 @@ public static class UserMappings
 
     public static UserResponse ToResponse(this User user)
     {
-        UserResponse response = new UserResponse
+        UserResponse response = new
         (
             user.Id,
             user.Email,
@@ -41,5 +41,16 @@ public static class UserMappings
         );
 
         return response;
+    }
+
+    public static LoginResponse ToLoginResponse(this UserResponse response, string token, DateTime expiresAt)
+    {
+        LoginResponse loginResponse = new(
+            response,
+            token,
+            expiresAt
+        );
+
+        return loginResponse;
     }
 }

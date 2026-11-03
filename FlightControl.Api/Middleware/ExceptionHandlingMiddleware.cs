@@ -38,6 +38,17 @@ public class ExceptionHandlingMiddleware
             await WriteProblemAsync(context, problem);
         }
 
+        catch(InvalidCredentialsException ex)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Title = "Unauthorized",
+                Detail = ex.Message
+            };
+            await WriteProblemAsync(context, problem);
+        }
+
         catch(ConflictException ex)
         {
             var problem = new ProblemDetails
