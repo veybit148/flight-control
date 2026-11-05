@@ -11,12 +11,14 @@ using FlightControl.Validation.Validators.Users;
 using FlightControl.Dto.Users;
 using FlightControl.Domain.Security;
 using FlightControl.Domain.Operations.Auth;
+using FlightControl.Domain.Operations.Users;
 using FlightControl.Domain.Seeding;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.OpenApi;
+using FlightControl.Api.Security;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -49,6 +51,7 @@ var connectionString =
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -56,8 +59,10 @@ builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
+builder.Services.AddScoped<IUserOperation, UserOperation>();
 builder.Services.AddScoped<AuthoritySeeder>();
 builder.Services.AddSingleton<ITokenService, TokenService>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection("Jwt"))

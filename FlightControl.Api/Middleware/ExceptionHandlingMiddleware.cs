@@ -38,7 +38,7 @@ public class ExceptionHandlingMiddleware
             await WriteProblemAsync(context, problem);
         }
 
-        catch(InvalidCredentialsException ex)
+        catch(UnauthorizedException ex)
         {
             var problem = new ProblemDetails
             {

@@ -1,6 +1,5 @@
 using FlightControl.Domain.Operations.Auth;
 using FlightControl.Dto.Users;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FlightControl.Api.Controllers;
@@ -29,18 +28,4 @@ public class AuthController : ControllerBase
        var response = await _authOperation.LoginAsync(request);
        return StatusCode(StatusCodes.Status200OK, response);
     }
-
-    [HttpGet("me")]
-    [Authorize]
-    public IActionResult Me()
-    {
-       var userClaims = User.Claims.Select(c => new 
-       {
-           Type = c.Type,
-           Value = c.Value
-       }).ToList();
-
-       return Ok(userClaims);
-    }
-
 }
