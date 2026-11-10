@@ -1,6 +1,6 @@
-namespace FlightControl.Dto.Users;
+namespace FlightControl.Dto.Auth;
 
 public record LoginRequest(
     string Email,
     string Password
-);
+    );

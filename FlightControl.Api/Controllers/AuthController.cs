@@ -1,5 +1,5 @@
 using FlightControl.Domain.Operations.Auth;
-using FlightControl.Dto.Users;
+using FlightControl.Dto.Auth;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FlightControl.Api.Controllers;
@@ -27,5 +27,12 @@ public class AuthController : ControllerBase
     {
        var response = await _authOperation.LoginAsync(request);
        return StatusCode(StatusCodes.Status200OK, response);
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh(RefreshRequest request)
+    {
+        var response = await _authOperation.RefreshAsync(request);
+        return StatusCode(StatusCodes.Status200OK, response);
     }
 }

@@ -1,4 +1,3 @@
-
 using FlightControl.Dal;
 using FlightControl.Dal.Entities;
 using FlightControl.Dal.Enums;
@@ -9,9 +8,7 @@ namespace FlightControl.Repository.Repositories;
 
 public class UserRepository: BaseRepository<User>, IUserRepository
 {
-    public UserRepository(AppDbContext context): base(context)
-    {
-    }
+    public UserRepository(AppDbContext context): base(context){}
 
     public async Task<User?> GetByEmailAsync(string email)
     {   

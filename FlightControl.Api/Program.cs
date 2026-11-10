@@ -19,6 +19,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.OpenApi;
 using FlightControl.Api.Security;
+using FlightControl.Dto.Auth;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,8 +55,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>(); 
+builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
@@ -76,6 +79,12 @@ builder.Services.AddOptions<JwtOptions>()
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
     ?? throw new InvalidOperationException("Configuration section 'Jwt' is missing.");
 
+builder.Services.AddOptions<RefreshTokenOptions>()
+    .Bind(builder.Configuration.GetSection("RefreshToken"))
+    .Validate(o => o.AbsoluteLifetimeDays >= o.SlidingLifetimeDays, "Sliding time can't be bigger than absolute")
+    .Validate(o => o.AbsoluteLifetimeDays <= 90, "Max life time of a token can be 90 days")
+    .Validate(o => o.SlidingLifetimeDays >= 1, "Sliding time can't be lower than 1")
+    .ValidateOnStart();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -99,3 +99,24 @@ Design decisions made in this project, including places where it intentionally d
 **Decision:** Registering with an email that is already in use returns 409 with "This email is already in use."
 
 **Reason:** This allows user enumeration: anyone can check whether an email is registered. The usual fix is a verification flow in which registration always returns the same response and the details are sent to the email address itself; this needs email infrastructure, which is outside the scope of this project. Rate limiting on the registration endpoint could make enumeration slower later. Login must not repeat this: an unknown email and a wrong password will return the same response.
+
+## 12. Refresh token reuse revokes every session of the user
+
+**Date:** 2026-11-10
+
+**Decision:** Refresh tokens are rotated on every use: the used token is revoked and a new one is issued. Revoked rows are kept, not deleted. If a revoked token is presented again, it is treated as a sign that the token was copied, and every active refresh token of that user is revoked. On refresh, the revocation check runs before the expiry check, so a revoked token that has also expired is still detected as reuse.
+
+**Reason:** A rotated token is used only once by a well-behaved client, because it receives the new token in the same response. A second use means two parties hold the same token, and the server cannot tell which one is the real user. Revoking only the affected session would leave other sessions open if the attacker also has another way in. In an airspace control system, an authority account in the wrong hands can approve flights and remove restricted zones, so asking the user to log in again everywhere is the smaller cost.
+
+**Known trade-offs:**
+
+- If the response of a successful refresh is lost (for example, the connection drops), the client retries with the old token and the user is logged out of every device. There is no grace period for this.
+- If a client sends several refresh requests in parallel with the same token (for example, several requests receive 401 at once), every request after the first is treated as reuse. Clients must send only one refresh request at a time and let other requests wait for its result.
+
+## 13. Concurrent refresh requests are not protected (known limitation)
+
+**Date:** 2026-11-10
+
+**Decision:** The refresh flow reads the token, checks that it is not revoked, and then revokes it and saves a new one. These steps are not protected against two requests running at the same time.
+
+**Reason:** If two refresh requests with the same token arrive within a few milliseconds, both can read the row before either saves, both see it as not revoked, and both issue a new token. The session then splits into two valid chains and reuse detection does not trigger. The usual fix is optimistic concurrency: a version value on the row, so that the second save is rejected because the row changed after it was read. This is postponed until the permit approval step, where the same problem appears (two authorities deciding on the same request) and both will use the same mechanism. Until then, item 12's client rule (one refresh request at a time) also reduces the chance of this happening.

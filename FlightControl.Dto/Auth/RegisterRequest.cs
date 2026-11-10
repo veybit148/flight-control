@@ -1,6 +1,6 @@
 using FlightControl.Dto.Enums;
 
-namespace FlightControl.Dto.Users;
+namespace FlightControl.Dto.Auth;
 
 public record RegisterRequest(
     string Email, 

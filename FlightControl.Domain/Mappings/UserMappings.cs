@@ -1,5 +1,6 @@
 using FlightControl.Dal.Entities;
 using FlightControl.Dal.Enums;
+using FlightControl.Dto.Auth;
 using FlightControl.Dto.Enums;
 using FlightControl.Dto.Users;
 
@@ -7,7 +8,6 @@ namespace FlightControl.Domain.Mappings;
 
 public static class UserMappings
 {
-    
     public static User ToEntity(this RegisterRequest request, string passwordHash)
     {
        var user = new User
@@ -43,12 +43,11 @@ public static class UserMappings
         return response;
     }
 
-    public static LoginResponse ToLoginResponse(this UserResponse response, string token, DateTime expiresAt)
+    public static LoginResponse ToLoginResponse(this UserResponse userResponse, TokenResponse tokenResponse)
     {
         LoginResponse loginResponse = new(
-            response,
-            token,
-            expiresAt
+            userResponse,
+            tokenResponse
         );
 
         return loginResponse;
