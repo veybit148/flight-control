@@ -5,5 +5,4 @@ public enum UserRole{
     FleetOwner, 
     Military, 
     Authority
-
 }

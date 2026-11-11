@@ -7,6 +7,13 @@ public class AppDbContext : DbContext
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    public DbSet<Aircraft> Aircraft => Set<Aircraft>();
+
+    public DbSet<FleetMembership> FleetMemberships => Set<FleetMembership>();
+
+    public DbSet<Fleet> Fleets => Set<Fleet>();
+
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {

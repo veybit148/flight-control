@@ -120,3 +120,36 @@ Design decisions made in this project, including places where it intentionally d
 **Decision:** The refresh flow reads the token, checks that it is not revoked, and then revokes it and saves a new one. These steps are not protected against two requests running at the same time.
 
 **Reason:** If two refresh requests with the same token arrive within a few milliseconds, both can read the row before either saves, both see it as not revoked, and both issue a new token. The session then splits into two valid chains and reuse detection does not trigger. The usual fix is optimistic concurrency: a version value on the row, so that the second save is rejected because the row changed after it was read. This is postponed until the permit approval step, where the same problem appears (two authorities deciding on the same request) and both will use the same mechanism. Until then, item 12's client rule (one refresh request at a time) also reduces the chance of this happening.
+
+## 14. Interface in Domain, implementation in Api for the current user
+
+**Date:** 2026-11-05
+
+**Decision:** `ICurrentUser` (user ID, role, `IsAuthenticated`) is defined in Domain. `CurrentUser` implements it in the Api project by reading the claims of the current HTTP request through `IHttpContextAccessor`. Values are computed when read, not stored in the constructor.
+
+**Reason:** Operations need to know who is calling, but Domain must not depend on ASP.NET Core. Passing the user ID as a parameter from every controller would let a controller pass a wrong value (for example, one from the request body). With `ICurrentUser`, the identity always comes from the signed token. Values are read on access so that the class stays correct even if its lifetime is registered wrongly.
+
+## 15. Two sources of 401 responses
+
+**Date:** 2026-11-05
+
+**Decision:** `UnauthorizedException` is the base type for every 401 raised by our code; `InvalidCredentialsException` derives from it. The middleware maps the base type to a 401 with a `ProblemDetails` body.
+
+**Reason:** A single catch handles every current and future 401 case. The accepted inconsistency: 401 responses produced by `JwtBearer` (missing, expired or invalid access token) have an empty body and carry the reason in the `WWW-Authenticate` header, while ours carry it in the body.
+
+## 16. Refresh tokens
+
+**Date:** 2026-11-10
+
+**Decision:**
+
+- Login returns a 15-minute JWT access token and a refresh token. `POST /api/auth/refresh` exchanges a refresh token for a new pair; it does not require an access token.
+- A refresh token is 64 random bytes (Base64Url). Only its SHA-256 hash (hex) is stored, with a unique index. No salt and no slow hash.
+- Lifetime is hybrid: each token expires 7 days after it is issued, but never later than 30 days after the login that started the session. Both values come from `RefreshTokenOptions` and are validated on startup.
+- Every login starts a new session; earlier sessions are not revoked.
+- Refresh checks, in this order: the token exists, it is not revoked (otherwise item 12), it has not expired, the user still exists. All failures return the same message.
+- Revocation sets `RevokedAt`; rows are never deleted on revocation. Deleting a user deletes their refresh tokens (cascade).
+
+**Reason:** Short access tokens limit the damage of a stolen token but cannot be revoked; refresh tokens are stored and can be. A random 512-bit value cannot be guessed, so a fast unsalted hash is enough and allows a direct lookup by hash, which a salted hash would not. The absolute limit stops a stolen token chain from living forever.
+
+**Known limitation:** A session abandoned by the user (for example, after logging in again on the same device) stays valid until it expires. If such a token was stolen, reuse detection never triggers because the real user never presents it again. Revoking all sessions on password change would close this gap and is not implemented yet.
