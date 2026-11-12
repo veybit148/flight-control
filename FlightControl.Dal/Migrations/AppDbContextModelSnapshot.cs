@@ -74,6 +74,47 @@ namespace FlightControl.Dal.Migrations
                     b.ToTable("Aircraft");
                 });
 
+            modelBuilder.Entity("FlightControl.Dal.Entities.AircraftStatusChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AircraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChangedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AircraftId");
+
+                    b.HasIndex("ChangedById");
+
+                    b.ToTable("AircraftStatusChanges");
+                });
+
             modelBuilder.Entity("FlightControl.Dal.Entities.Fleet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -219,6 +260,21 @@ namespace FlightControl.Dal.Migrations
                     b.HasOne("FlightControl.Dal.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FlightControl.Dal.Entities.AircraftStatusChange", b =>
+                {
+                    b.HasOne("FlightControl.Dal.Entities.Aircraft", null)
+                        .WithMany()
+                        .HasForeignKey("AircraftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FlightControl.Dal.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -25,4 +25,10 @@ public class UserRepository: BaseRepository<User>, IUserRepository
         return await _dbSet.AnyAsync(u => u.Role == role);
     }
 
+    public async Task<IReadOnlyList<User>> GetByIdsAsync(IEnumerable<Guid> ids)
+    {
+        return await _dbSet
+            .Where(u => ids.Contains(u.Id))
+            .ToListAsync();
+    }
 }

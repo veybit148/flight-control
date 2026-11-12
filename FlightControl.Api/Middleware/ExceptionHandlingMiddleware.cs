@@ -49,6 +49,17 @@ public class ExceptionHandlingMiddleware
             await WriteProblemAsync(context, problem);
         }
 
+        catch (ForbiddenException ex)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status403Forbidden,
+                Title = "Forbidden",
+                Detail = ex.Message
+            };
+            await WriteProblemAsync(context, problem);
+        }
+
         catch(ConflictException ex)
         {
             var problem = new ProblemDetails

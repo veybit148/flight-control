@@ -20,6 +20,9 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.OpenApi;
 using FlightControl.Api.Security;
 using FlightControl.Dto.Auth;
+using FlightControl.Dto.Fleets;
+using FlightControl.Validation.Validators.Fleets;
+using FlightControl.Domain.Operations.Fleets;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -53,22 +56,41 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
 
 builder.Services.AddHttpContextAccessor();
+
+// Unit of work and repositories
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IAircraftRepository, AircraftRepository>();
+builder.Services.AddScoped<IAircraftStatusChangeRepository, AircraftStatusChangeRepository>();
 builder.Services.AddScoped<IFleetRepository, FleetRepository>();
 builder.Services.AddScoped<IFleetMembershipRepository, FleetMembershipRepository>();
+
+// Security
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
-builder.Services.AddSingleton<IPasswordService, PasswordService>(); 
+builder.Services.AddSingleton<IPasswordService, PasswordService>();
+builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+
+// Validators
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<CreateAircraftRequest>, CreateAircraftRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<UpdateAircraftRequest>, UpdateAircraftRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<ChangeAircraftStatusRequest>, ChangeAircraftStatusRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<AircraftQuery>, AircraftQueryValidator>();
+builder.Services.AddSingleton<AbstractValidator<CreateFleetRequest>, CreateFleetRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<AddFleetMemberRequest>, AddFleetMemberRequestValidator>();
+
+// Operations
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 builder.Services.AddScoped<IUserOperation, UserOperation>();
+builder.Services.AddScoped<IAircraftOperation, AircraftOperation>();
+builder.Services.AddScoped<IFleetOperation, FleetOperation>();
+
+// Seeding
 builder.Services.AddScoped<AuthoritySeeder>();
-builder.Services.AddSingleton<ITokenService, TokenService>();
-builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection("Jwt"))

@@ -11,8 +11,9 @@ public class AppDbContext : DbContext
     public DbSet<Aircraft> Aircraft => Set<Aircraft>();
 
     public DbSet<FleetMembership> FleetMemberships => Set<FleetMembership>();
-
     public DbSet<Fleet> Fleets => Set<Fleet>();
+    public DbSet<AircraftStatusChange> AircraftStatusChanges => Set<AircraftStatusChange>();
+    
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)

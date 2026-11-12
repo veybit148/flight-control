@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlightControl.Dto\FlightControl.Dto.csproj" />
+    <ProjectReference Include="..\FlightControl.Dal\FlightControl.Dal.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
