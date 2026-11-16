@@ -10,12 +10,19 @@ namespace FlightControl.Api.Controllers;
 public class HealthController : ControllerBase 
 {
     [HttpGet]
+    [ProducesResponseType<string>(StatusCodes.Status200OK)]
     public IActionResult CheckStatus()
     {
         return Ok("Healthy");
     }
 
+    // Throws the requested exception on purpose to test ExceptionHandlingMiddleware.
     [HttpGet("error")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
     public IActionResult TestError(string type)
     {
         if(type == "notfound")

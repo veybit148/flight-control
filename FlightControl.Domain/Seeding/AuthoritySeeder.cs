@@ -57,7 +57,8 @@ public class AuthoritySeeder
             Email = normalizedEmail,
             FullName = "Authority",
             PasswordHash = hashedPassword,
-            Role = UserRole.Authority
+            Role = UserRole.Authority,
+            Status = UserStatus.Active
         };
 
         _repository.Add(user);

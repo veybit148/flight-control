@@ -1,4 +1,5 @@
 using FlightControl.Dal.Entities;
+using FlightControl.Dal.Enums;
 using FlightControl.Domain.Exceptions;
 using FlightControl.Domain.Mappings;
 using FlightControl.Domain.Security;
@@ -7,6 +8,7 @@ using FlightControl.Dto.Users;
 using FlightControl.Repository.Interfaces;
 using FlightControl.Validation.Core;
 using FlightControl.Dto.Auth;
+using FlightControl.Dto.Enums;
 
 namespace FlightControl.Domain.Operations.Auth;
 
@@ -14,6 +16,7 @@ public class AuthOperation : IAuthOperation
 {
     private readonly AbstractValidator<RegisterRequest> _registerValidator;
     private readonly AbstractValidator<LoginRequest> _loginValidator;
+    private readonly AbstractValidator<ChangePasswordRequest> _changePasswordValidator;
 
     private readonly IUserRepository _repository;
     private readonly IPasswordService _passwordService;
@@ -21,25 +24,30 @@ public class AuthOperation : IAuthOperation
     private readonly IRefreshTokenService _refreshTokenService;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUser _currentUser;
 
     public AuthOperation(
         AbstractValidator<RegisterRequest> registerValidator,
         AbstractValidator<LoginRequest> loginValidator,
+        AbstractValidator<ChangePasswordRequest> changePasswordValidator,
         IUserRepository repository,
         IPasswordService passwordService,
         IRefreshTokenService refreshTokenService,
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        ICurrentUser currentUser)
     {
         _registerValidator = registerValidator;
         _loginValidator = loginValidator;
+        _changePasswordValidator = changePasswordValidator;
         _repository = repository;
         _passwordService = passwordService;
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
+        _currentUser = currentUser;
     }
 
     public async Task<UserResponse> RegisterAsync(RegisterRequest request)
@@ -56,7 +64,12 @@ public class AuthOperation : IAuthOperation
 
         string hashedPassword = _passwordService.HashPassword(request.Password);
 
-        User user = normalizedRequest.ToEntity(hashedPassword);
+        // Military accounts need authority approval before they can log in.
+        UserStatus status = normalizedRequest.Role == RegistrationRole.Military
+            ? UserStatus.PendingApproval
+            : UserStatus.Active;
+
+        User user = normalizedRequest.ToEntity(hashedPassword, status);
     
         _repository.Add(user);
 
@@ -82,8 +95,11 @@ public class AuthOperation : IAuthOperation
 
         if(!_passwordService.VerifyPassword(user.PasswordHash, request.Password))
         {
-            throw new InvalidCredentialsException("Invalid Email or Password.");            
+            throw new InvalidCredentialsException("Invalid Email or Password.");
         }
+
+        // Checked only after the password, so the status is never revealed to someone without it.
+        EnsureCanLogIn(user);
 
         AccessToken accessToken = _tokenService.GenerateToken(user.Id, user.Role);
 
@@ -156,8 +172,12 @@ public class AuthOperation : IAuthOperation
         };
         _refreshTokenRepository.Add(refreshToken);
 
-        User user = await _repository.GetByIdAsync(oldToken.UserId) ??
+        User? user = await _repository.GetByIdAsync(oldToken.UserId);
+
+        if(user == null || user.Status != UserStatus.Active)
+        {
             throw new UnauthorizedException("Invalid Refresh Token.");
+        }
 
         AccessToken accessToken = _tokenService.GenerateToken(user.Id, user.Role);    
 
@@ -172,5 +192,70 @@ public class AuthOperation : IAuthOperation
 
         await _unitOfWork.SaveChangesAsync();
         return tokenResponse;
+    }
+
+    public async Task LogoutAsync(RefreshRequest request)
+    {
+        // The caller always gets the same response, so this never reveals whether a token exists.
+        string hashedRefreshToken = _refreshTokenService.Hash(request.RefreshToken);
+        RefreshToken? token = await _refreshTokenRepository.GetByHashAsync(hashedRefreshToken);
+
+        DateTime now = DateTime.UtcNow;
+
+        if(token == null || token.RevokedAt != null || now >= token.ExpiresAt)
+        {
+            return;
+        }
+
+        token.RevokedAt = now;
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    public async Task ChangePasswordAsync(ChangePasswordRequest request)
+    {
+        _changePasswordValidator.ThrowIfInvalid(request);
+
+        User user = await _repository.GetByIdAsync(CurrentUserId) ??
+            throw new UnauthorizedException("User account no longer exists.");
+
+        if(!_passwordService.VerifyPassword(user.PasswordHash, request.CurrentPassword))
+        {
+            ValidationResult result = new();
+            result.AddError(nameof(request.CurrentPassword), "Current password is incorrect.");
+            throw new ValidationException(result);
+        }
+
+        user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+
+        // Every session ends with the old password. Access tokens already issued stay valid until they expire.
+        DateTime now = DateTime.UtcNow;
+        IReadOnlyList<RefreshToken> activeTokens = await _refreshTokenRepository.GetActiveByUserIdAsync(user.Id);
+
+        foreach(RefreshToken token in activeTokens)
+        {
+            token.RevokedAt = now;
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    // Helpers
+
+    private Guid CurrentUserId => _currentUser.UserId
+        ?? throw new InvalidOperationException("AuthOperation requires an authenticated user here.");
+
+    private static void EnsureCanLogIn(User user)
+    {
+        switch (user.Status)
+        {
+            case UserStatus.Active:
+                return;
+            case UserStatus.PendingApproval:
+                throw new ForbiddenException("Your account is pending approval by the authority.");
+            case UserStatus.Suspended:
+                throw new ForbiddenException("Your account is suspended.");
+            default:
+                throw new InvalidOperationException($"Unknown user status {user.Status}.");
+        }
     }
 }

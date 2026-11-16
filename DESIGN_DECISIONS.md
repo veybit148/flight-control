@@ -147,9 +147,174 @@ Design decisions made in this project, including places where it intentionally d
 - A refresh token is 64 random bytes (Base64Url). Only its SHA-256 hash (hex) is stored, with a unique index. No salt and no slow hash.
 - Lifetime is hybrid: each token expires 7 days after it is issued, but never later than 30 days after the login that started the session. Both values come from `RefreshTokenOptions` and are validated on startup.
 - Every login starts a new session; earlier sessions are not revoked.
-- Refresh checks, in this order: the token exists, it is not revoked (otherwise item 12), it has not expired, the user still exists. All failures return the same message.
+- Refresh checks, in this order: the token exists, it is not revoked (otherwise item 12), it has not expired, the user still exists and is `Active` (item 27). All failures return the same message.
 - Revocation sets `RevokedAt`; rows are never deleted on revocation. Deleting a user deletes their refresh tokens (cascade).
 
 **Reason:** Short access tokens limit the damage of a stolen token but cannot be revoked; refresh tokens are stored and can be. A random 512-bit value cannot be guessed, so a fast unsalted hash is enough and allows a direct lookup by hash, which a salted hash would not. The absolute limit stops a stolen token chain from living forever.
 
 **Known limitation:** A session abandoned by the user (for example, after logging in again on the same device) stays valid until it expires. If such a token was stolen, reuse detection never triggers because the real user never presents it again. Revoking all sessions on password change would close this gap and is not implemented yet.
+
+**Resolved (2026-11-16):** A password change now revokes every active refresh token of the user (item 29), and a user can end a session explicitly with logout (item 28). A token stolen from an abandoned session still lives until it expires if the user never changes their password.
+
+## 17. Fleets with a separate membership table
+
+**Date:** 2026-11-11
+
+**Decision:** A `Fleet` has a name and an owner. Pilots join fleets through `FleetMembership` rows, with a unique index on `(FleetId, PilotId)`. A fleet owner can have several fleets, and a pilot can be a member of several fleets. Fleet names are unique per owner, with a unique index on `(OwnerId, Name)`.
+
+**Reason:** A pilot can work for several operators, and a military command can split its units into several fleets. A single `FleetOwnerId` on the user would not allow either.
+
+## 18. Military commanders own fleets with the Military role
+
+**Date:** 2026-11-11
+
+**Decision:** Users with the `Military` role can own fleets, like fleet owners. Military personnel use the `Pilot` role and are members of military fleets. A military permit request is opened by the commander on behalf of a pilot.
+
+**Reason:** The task document derives the permit type from the role of the requester (Pilot → Individual, FleetOwner → Fleet, Military → Military). Keeping commanders in the `Military` role keeps that rule intact. A separate `IsMilitary` flag on fleets was rejected because it would duplicate information already given by the owner's role. A pilot who opens a request on their own gets an individual request, which matches reality: military flights are authorised through the command chain.
+
+## 19. Aircraft owner and fleet
+
+**Date:** 2026-11-11
+
+**Decision:** `Aircraft.OwnerId` is always set and is the user who manages the aircraft in this system (the operator, not necessarily the legal owner). `FleetId` is optional; an aircraft without a fleet is individual. An aircraft can be assigned only to a fleet of its own owner. Registration numbers are trimmed, converted to upper case, unique, and can be changed on update.
+
+**Reason:** Ownership checks stay a single comparison (`aircraft.OwnerId == currentUserId`) regardless of fleets. An `IsIndividual` flag was rejected because it would duplicate what a null `FleetId` already says.
+
+## 20. Aircraft status machine and history
+
+**Date:** 2026-11-12
+
+**Decision:** Aircraft start as `Active`. The status can be changed only through `POST /api/aircraft/{id}/status`, never through a regular update. The owner can switch between `Active` and `Maintenance`; only the authority can set or lift `Grounded`, and a reason is required when grounding. Every change is stored in `AircraftStatusChange` (from, to, reason, who, when) in the same save as the status itself. A change to the current status returns 409; a transition the user is not allowed to make returns 403.
+
+**Reason:** In aviation, routine maintenance is the operator's responsibility, while grounding is a regulatory decision. A dedicated endpoint makes every status change pass through the same rules and leave a history row.
+
+## 21. Access rules for aircraft and fleets
+
+**Date:** 2026-11-12
+
+**Decision:** Owners see and manage only their own aircraft and fleets. The authority sees all of them, can change aircraft status, and cannot create, update or delete aircraft or fleets. Accessing an aircraft or fleet that belongs to someone else returns 404, the same as one that does not exist. Role restrictions are applied on the controller with `[Authorize(Roles = ...)]`, which returns 403.
+
+**Reason:** A 403 for someone else's resource would confirm that it exists. Role checks are coarse checks on who the caller is and belong on the endpoint; ownership checks need the data and belong in the operation.
+
+## 22. Delete behaviors
+
+**Date:** 2026-11-11
+
+**Decision:**
+
+- Users with fleets or aircraft cannot be deleted (restrict).
+- Deleting a fleet deletes its memberships (cascade) and detaches its aircraft (set null).
+- Deleting a user deletes their fleet memberships and refresh tokens (cascade).
+- Deleting an aircraft deletes its status history (cascade).
+
+**Reason:** Cascade is used only for rows that have no meaning without their parent. Aircraft and fleets have value of their own and later carry permit history, so their deletion must be a deliberate step.
+
+**Known limitation:** Deleting an aircraft also deletes its status history. Retiring aircraft instead of deleting them would keep it.
+
+## 23. Fleet names are case-sensitive
+
+**Date:** 2026-11-11
+
+**Decision:** Fleet names are only trimmed; "Doğu Filosu" and "doğu filosu" are different names.
+
+**Reason:** Case-insensitive comparison depends on language rules: in Turkish the lower case of "I" is "ı", in English it is "i", and `ToLowerInvariant` turns "İ" into "i" plus a combining dot. A Turkish collation would handle Turkish names correctly but English names with "I" incorrectly. The extra complexity was not worth preventing names that differ only in case.
+
+## 24. Enum values travel as strings in DTOs
+
+**Date:** 2026-11-12
+
+**Decision:** Category and status are strings in DTOs. Validators accept only exact enum names (case-insensitive); mappings convert them with `Enum.Parse`.
+
+**Reason:** The Dto project has no dependencies and cannot see the enums in Dal. A duplicate enum in Dto would have to be kept in sync by hand. Validation by name avoids `Enum.TryParse` accepting numbers or comma-separated values.
+
+## 25. Fleet members are added by email
+
+**Date:** 2026-11-12
+
+**Decision:** A fleet owner adds a member by the pilot's email address. Only users with the `Pilot` role can be added; an unknown email and a non-pilot both return 404.
+
+**Reason:** A fleet owner knows a pilot's email, not their ID.
+
+**Known limitations:**
+
+- A fleet owner can find out whether an email belongs to a registered pilot.
+- Pilots are added without their consent; an invitation flow is out of scope.
+
+## 26. Open items
+
+**Date:** 2026-11-12
+
+- Anyone can register with the `Military` role. Planned: military accounts need authority approval before they can log in. **Resolved (2026-11-16, item 27).**
+- Users have no status (pending, active, suspended); the only way to deactivate a user is to delete them. Planned together with the item above. **Resolved (2026-11-16, item 27).**
+- Revoking all refresh tokens on password change (item 16). **Resolved (2026-11-16, item 29).**
+
+## 27. User status and military account approval
+
+**Date:** 2026-11-16
+
+**Decision:**
+
+- `User.Status` is one of `PendingApproval`, `Active` and `Suspended`, stored as a string like the role (item 3). The `AddUserStatus` migration gives the column the database default `'Active'`, so existing users became active.
+- Users who register with the `Military` role start as `PendingApproval`; every other registration and the seeded authority start as `Active`.
+- Login checks the status only after the password has been verified. A pending or suspended user gets 403 with a message saying which, and no tokens. An unknown email or a wrong password still gets the same 401 as before.
+- Refresh treats a user who is not `Active` like any other invalid refresh token: the same 401 and message.
+- The authority manages status through `/api/users/pending`, `/api/users/{id}/approve`, `/suspend` and `/reactivate`. Allowed transitions: `PendingApproval → Active` (approve), `PendingApproval` or `Active → Suspended` (suspend), `Suspended → Active` (reactivate). Any other transition returns 409, an unknown user 404, and changing one's own status 403.
+- Suspending a user revokes all of their active refresh tokens in the same save as the status change.
+- `UserResponse` carries the status as a string (item 24).
+- The database default exists only in the migration, not in the EF model (`HasDefaultValue`). `PendingApproval` is the enum's CLR default (0), so with a model default EF would treat a pending user as "value not set", leave the column out of the `INSERT`, and the database would store `Active`. Every insert therefore sends the status explicitly; `User.Status` is `required`, so it cannot be forgotten.
+
+**Reason:** A military account can own fleets and open military permit requests (item 18), so letting anyone claim the role was the most serious open item (item 26). Checking the status after the password means the response never tells someone without the password whether an account is pending or suspended, while a real user learns why they cannot log in. Suspension instead of deletion keeps the user's fleets, aircraft and history, which deletion would either block (item 22) or destroy. An authority suspending itself could leave the system without an active authority, and nobody could undo it through the API.
+
+**Known limitations:**
+
+- Access tokens already issued stay valid until they expire (at most 15 minutes) after a user is suspended, because the status is not checked on every request. Closing this gap would need a database lookup per request or a token blacklist.
+- Status changes are not recorded (who approved or suspended a user, when, and why), unlike aircraft status changes (item 20).
+- Suspending a fleet owner or military commander does not affect their fleets and aircraft.
+
+## 28. Logout
+
+**Date:** 2026-11-16
+
+**Decision:** `POST /api/auth/logout` takes a refresh token in the body (`RefreshRequest`) and does not require an access token. If the token exists, is not revoked and has not expired, it is revoked. The endpoint always returns 204, whether or not anything was revoked. Only that one session ends; other sessions of the user stay valid. Presenting an already revoked token here does not trigger reuse detection (item 12).
+
+**Reason:** The access token may already have expired when the user logs out, so logout must work with the refresh token alone. Always returning 204 means the endpoint reveals nothing about the token and is safe to retry. Reuse detection is left to the refresh endpoint: a client that logs out right after a refresh whose response was lost would otherwise end every session of the user only for trying to log out.
+
+**Known limitation:** The access token of the session stays valid until it expires (at most 15 minutes); the client must discard it.
+
+## 29. Password change
+
+**Date:** 2026-11-16
+
+**Decision:** `POST /api/auth/change-password` requires an access token and takes `currentPassword` and `newPassword`. The new password follows the same rules as registration (8 to 100 characters, shared through `PasswordRules`) and must differ from the current one. A wrong current password returns 400 with a field error on `CurrentPassword`. On success the new hash is stored and every active refresh token of the user is revoked in the same save, including the session that made the change; the endpoint returns 204 and the client must log in again to get a new refresh token.
+
+**Reason:** A wrong current password is invalid input from an authenticated user, not a failed authentication; a 401 would make clients treat their access token as broken and try to refresh. Someone who changes their password usually suspects that it, or a session, is compromised, so every session must end (item 16).
+
+**Known limitation:** Access tokens already issued, including ones held by an attacker, stay valid until they expire (at most 15 minutes, `Jwt:AccessTokenMinutes`). Closing this gap would need a per-user security stamp in the token, checked against the database on every request.
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Retrospective notes
+
+### Project boundaries vs. separation of concerns
+
+**Date:** 2026-11-12
+
+Separating request shape validation from business rules was worth it: validators stay free of the database, and business checks (uniqueness, ownership, allowed transitions) stay in the operations.
+
+Putting validation and DTOs into separate projects was a different decision, and its cost showed up quickly:
+
+- The Dto project cannot see the enums in Dal, so enum values travel as strings and are validated and parsed again (item 24).
+- The Validation project needed a reference to Dal to check those same enum names.
+- Following a single request means jumping across six projects, which made the code harder to read than the rules it implements.
+
+In a project of my own, I would keep validators, DTOs and repositories as folders in fewer projects, and split a project out only when there is a concrete reason: separate deployment, separate ownership, or a boundary the compiler should enforce. Patterns such as interfaces, adapters and the unit of work earned their place here because each solved a problem we actually hit; the number of projects did not.

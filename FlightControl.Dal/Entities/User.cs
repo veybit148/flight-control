@@ -8,4 +8,5 @@ public class User : BaseEntity
     public required string PasswordHash {get; set;}
     public required string FullName {get; set;}
     public required UserRole Role {get; set;}
+    public required UserStatus Status {get; set;}
 }

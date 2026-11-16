@@ -31,4 +31,12 @@ public class UserRepository: BaseRepository<User>, IUserRepository
             .Where(u => ids.Contains(u.Id))
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<User>> GetByStatusAsync(UserStatus status)
+    {
+        return await _dbSet
+            .Where(u => u.Status == status)
+            .OrderBy(u => u.CreatedAt)
+            .ToListAsync();
+    }
 }

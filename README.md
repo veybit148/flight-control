@@ -79,3 +79,59 @@ dotnet run --project FlightControl.Api
 ## Swagger Address
 
 http://localhost:5288/swagger/index.html
+
+## Endpoints
+
+"Authenticated" means any user with a valid access token (`Authorization: Bearer <token>`). Role-restricted endpoints return 403 for other roles.
+
+### Auth
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/auth/register` | Anonymous |
+| POST | `/api/auth/login` | Anonymous |
+| POST | `/api/auth/refresh` | Anonymous (refresh token in body) |
+| POST | `/api/auth/logout` | Anonymous (refresh token in body) |
+| POST | `/api/auth/change-password` | Authenticated |
+
+Accounts registered with the `Military` role cannot log in until the authority approves them.
+
+### Users
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| GET | `/api/users/me` | Authenticated |
+| GET | `/api/users/pending` | Authority |
+| POST | `/api/users/{id}/approve` | Authority |
+| POST | `/api/users/{id}/suspend` | Authority |
+| POST | `/api/users/{id}/reactivate` | Authority |
+
+### Aircraft
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/aircraft` | Pilot, FleetOwner, Military |
+| GET | `/api/aircraft` | Authenticated (owners see their own, the authority sees all) |
+| GET | `/api/aircraft/{id}` | Authenticated (owner or authority) |
+| PUT | `/api/aircraft/{id}` | Pilot, FleetOwner, Military (owner only) |
+| POST | `/api/aircraft/{id}/status` | Authenticated (owner: Active/Maintenance; authority: any, including Grounded) |
+| DELETE | `/api/aircraft/{id}` | Pilot, FleetOwner, Military (owner only) |
+
+### Fleets
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/fleets` | FleetOwner, Military |
+| GET | `/api/fleets` | Authenticated (owners see their own, the authority sees all) |
+| GET | `/api/fleets/{id}` | Authenticated (owner or authority) |
+| DELETE | `/api/fleets/{id}` | FleetOwner, Military (owner only) |
+| POST | `/api/fleets/{id}/members` | FleetOwner, Military (owner only) |
+| GET | `/api/fleets/{id}/members` | Authenticated (owner or authority) |
+| DELETE | `/api/fleets/{id}/members/{pilotId}` | FleetOwner, Military (owner only) |
+
+### Health
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| GET | `/api/health` | Anonymous |
+| GET | `/api/health/error?type=...` | Anonymous (test endpoint for error responses) |

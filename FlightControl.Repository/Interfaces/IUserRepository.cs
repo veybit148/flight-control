@@ -9,4 +9,5 @@ public interface IUserRepository : IBaseRepository<User>
     Task<bool> ExistsByEmailAsync(string mail);
     Task<bool> ExistsByRoleAsync(UserRole mail);
     Task<IReadOnlyList<User>> GetByIdsAsync(IEnumerable<Guid> ids);
+    Task<IReadOnlyList<User>> GetByStatusAsync(UserStatus status);
 }

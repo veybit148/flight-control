@@ -23,5 +23,12 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Role)
             .HasConversion<string>()
             .HasMaxLength(32);
+
+        // No HasDefaultValue here: PendingApproval is the enum's CLR default (0), so EF would
+        // treat it as "not set" and let the database default overwrite it. The default value
+        // for existing rows lives only in the AddUserStatus migration.
+        builder.Property(u => u.Status)
+            .HasConversion<string>()
+            .HasMaxLength(32);
     }
 }

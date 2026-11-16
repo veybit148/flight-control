@@ -5,5 +5,6 @@ public record UserResponse(
     string Email,
     string FullName,
     DateTime CreatedAt,
-    string Role
+    string Role,
+    string Status
 );

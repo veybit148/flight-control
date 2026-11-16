@@ -37,22 +37,7 @@ public partial class RegisterRequestValidator: AbstractValidator<RegisterRequest
             result.AddError(nameof(instance.FullName), "Name can't exceed 100 characters");
         }
         
-        if(string.IsNullOrWhiteSpace(instance.Password))
-        {
-            result.AddError(nameof(instance.Password), "Password can't be empty");
-        }
-        else
-        {
-            if(instance.Password.Length > 100)
-            {
-                result.AddError(nameof(instance.Password), "Password length can't exceed 100 characters");
-            }
-
-            if(instance.Password.Length < 8)
-            {
-                result.AddError(nameof(instance.Password), "Password length must be at least 8 characters");
-            }
-        }
+        PasswordRules.Password(instance.Password, nameof(instance.Password), result);
 
         if(!Enum.IsDefined(instance.Role))
         {

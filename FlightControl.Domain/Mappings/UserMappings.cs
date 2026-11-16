@@ -8,14 +8,15 @@ namespace FlightControl.Domain.Mappings;
 
 public static class UserMappings
 {
-    public static User ToEntity(this RegisterRequest request, string passwordHash)
+    public static User ToEntity(this RegisterRequest request, string passwordHash, UserStatus status)
     {
        var user = new User
        {
             Email =  request.Email,
             PasswordHash = passwordHash,
             FullName = request.FullName,
-            Role = request.Role.ToUserRole()
+            Role = request.Role.ToUserRole(),
+            Status = status
        };
 
        return user;
@@ -37,7 +38,8 @@ public static class UserMappings
             user.Email,
             user.FullName,
             user.CreatedAt,
-            user.Role.ToString()
+            user.Role.ToString(),
+            user.Status.ToString()
         );
 
         return response;

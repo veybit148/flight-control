@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<FleetMembership> FleetMemberships => Set<FleetMembership>();
     public DbSet<Fleet> Fleets => Set<Fleet>();
     public DbSet<AircraftStatusChange> AircraftStatusChanges => Set<AircraftStatusChange>();
+    public DbSet<PilotLicense> PilotLicenses => Set<PilotLicense>();
+    public DbSet<LicenseCategory> LicenseCategories => Set<LicenseCategory>();
     
 
     public AppDbContext(DbContextOptions<AppDbContext> options)

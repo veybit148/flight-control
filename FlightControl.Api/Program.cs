@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Identity;
 using FlightControl.Dal.Entities;
 using FlightControl.Validation.Core;
 using FlightControl.Validation.Validators.Users;
-using FlightControl.Dto.Users;
 using FlightControl.Domain.Security;
 using FlightControl.Domain.Operations.Auth;
 using FlightControl.Domain.Operations.Users;
@@ -23,6 +22,9 @@ using FlightControl.Dto.Auth;
 using FlightControl.Dto.Fleets;
 using FlightControl.Validation.Validators.Fleets;
 using FlightControl.Domain.Operations.Fleets;
+using FlightControl.Domain.Operations.Licenses;
+using FlightControl.Dto.Licenses;
+using FlightControl.Validation.Validators.Licenses;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -76,6 +78,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 // Validators
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<ChangePasswordRequest>, ChangePasswordRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<CreateAircraftRequest>, CreateAircraftRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<UpdateAircraftRequest>, UpdateAircraftRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<ChangeAircraftStatusRequest>, ChangeAircraftStatusRequestValidator>();
@@ -88,6 +91,13 @@ builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 builder.Services.AddScoped<IUserOperation, UserOperation>();
 builder.Services.AddScoped<IAircraftOperation, AircraftOperation>();
 builder.Services.AddScoped<IFleetOperation, FleetOperation>();
+
+builder.Services.AddScoped<IPilotLicenseRepository, PilotLicenseRepository>();
+builder.Services.AddScoped<ILicenseCategoryRepository, LicenseCategoryRepository>();
+builder.Services.AddSingleton<AbstractValidator<CreateLicenseRequest>, CreateLicenseRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<UpdateLicenseRequest>, UpdateLicenseRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<SuspendLicenseRequest>, SuspendLicenseRequestValidator>();
+builder.Services.AddScoped<ILicenseOperation, LicenseOperation>();
 
 // Seeding
 builder.Services.AddScoped<AuthoritySeeder>();
