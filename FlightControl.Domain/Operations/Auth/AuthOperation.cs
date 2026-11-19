@@ -9,11 +9,15 @@ using FlightControl.Repository.Interfaces;
 using FlightControl.Validation.Core;
 using FlightControl.Dto.Auth;
 using FlightControl.Dto.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace FlightControl.Domain.Operations.Auth;
 
 public class AuthOperation : IAuthOperation
 {
+    // Every invalid refresh token gets the same message, so the response reveals nothing about why.
+    private const string InvalidRefreshTokenMessage = "Invalid Refresh Token.";
+
     private readonly AbstractValidator<RegisterRequest> _registerValidator;
     private readonly AbstractValidator<LoginRequest> _loginValidator;
     private readonly AbstractValidator<ChangePasswordRequest> _changePasswordValidator;
@@ -25,6 +29,7 @@ public class AuthOperation : IAuthOperation
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
+    private readonly ILogger<AuthOperation> _logger;
 
     public AuthOperation(
         AbstractValidator<RegisterRequest> registerValidator,
@@ -36,7 +41,8 @@ public class AuthOperation : IAuthOperation
         IRefreshTokenRepository refreshTokenRepository,
         ITokenService tokenService,
         IUnitOfWork unitOfWork,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ILogger<AuthOperation> logger)
     {
         _registerValidator = registerValidator;
         _loginValidator = loginValidator;
@@ -48,6 +54,7 @@ public class AuthOperation : IAuthOperation
         _refreshTokenRepository = refreshTokenRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
+        _logger = logger;
     }
 
     public async Task<UserResponse> RegisterAsync(RegisterRequest request)
@@ -137,11 +144,11 @@ public class AuthOperation : IAuthOperation
         DateTime now = DateTime.UtcNow;
         string hashedRefreshToken = _refreshTokenService.Hash(request.RefreshToken);
         RefreshToken oldToken = await _refreshTokenRepository.GetByHashAsync(hashedRefreshToken) ??
-        throw new UnauthorizedException("Invalid Refresh Token.");
+        throw new UnauthorizedException(InvalidRefreshTokenMessage);
 
         if(oldToken.RevokedAt != null)
         {
-            IReadOnlyList<RefreshToken> list = 
+            IReadOnlyList<RefreshToken> list =
             await _refreshTokenRepository.GetActiveByUserIdAsync(oldToken.UserId);
 
             foreach(RefreshToken t in list)
@@ -150,12 +157,24 @@ public class AuthOperation : IAuthOperation
             }
 
             await _unitOfWork.SaveChangesAsync();
-            throw new UnauthorizedException("Invalid Refresh Token.");
+
+            _logger.LogWarning(
+                "Refresh token reuse detected for user {UserId}; revoked {Count} active session(s).",
+                oldToken.UserId, list.Count);
+
+            throw new UnauthorizedException(InvalidRefreshTokenMessage);
         }
 
         if(now >= oldToken.ExpiresAt)
         {
-            throw new UnauthorizedException("Invalid Refresh Token.");
+            throw new UnauthorizedException(InvalidRefreshTokenMessage);
+        }
+
+        User? user = await _repository.GetByIdAsync(oldToken.UserId);
+
+        if(user == null || user.Status != UserStatus.Active)
+        {
+            throw new UnauthorizedException(InvalidRefreshTokenMessage);
         }
 
         GeneratedRefreshToken newRefreshToken = _refreshTokenService.CreateRefreshToken();
@@ -171,13 +190,6 @@ public class AuthOperation : IAuthOperation
             SessionExpiresAt = expires.sessionExpiresAt,
         };
         _refreshTokenRepository.Add(refreshToken);
-
-        User? user = await _repository.GetByIdAsync(oldToken.UserId);
-
-        if(user == null || user.Status != UserStatus.Active)
-        {
-            throw new UnauthorizedException("Invalid Refresh Token.");
-        }
 
         AccessToken accessToken = _tokenService.GenerateToken(user.Id, user.Role);    
 

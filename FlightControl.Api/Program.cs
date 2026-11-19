@@ -1,36 +1,46 @@
-using FlightControl.Dal;
-using FlightControl.Repository.Interfaces;
-using FlightControl.Repository;
-using Microsoft.EntityFrameworkCore;
-using FlightControl.Api.Middleware;
-using FlightControl.Repository.Repositories;
-using Microsoft.AspNetCore.Identity;
-using FlightControl.Dal.Entities;
-using FlightControl.Validation.Core;
-using FlightControl.Validation.Validators.Users;
-using FlightControl.Domain.Security;
-using FlightControl.Domain.Operations.Auth;
-using FlightControl.Domain.Operations.Users;
-using FlightControl.Domain.Seeding;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.OpenApi;
+using System.Text;
+using System.Text.Json.Serialization;
+using FlightControl.Api.Middleware;
 using FlightControl.Api.Security;
-using FlightControl.Dto.Auth;
-using FlightControl.Dto.Fleets;
-using FlightControl.Validation.Validators.Fleets;
+using FlightControl.Dal;
+using FlightControl.Dal.Entities;
+using FlightControl.Domain.Operations.Airspace;
+using FlightControl.Domain.Operations.Auth;
 using FlightControl.Domain.Operations.Fleets;
 using FlightControl.Domain.Operations.Licenses;
+using FlightControl.Domain.Operations.Permits;
+using FlightControl.Domain.Operations.Users;
+using FlightControl.Domain.Rules;
+using FlightControl.Domain.Security;
+using FlightControl.Domain.Seeding;
+using FlightControl.Dto.Airspace;
+using FlightControl.Dto.Auth;
+using FlightControl.Dto.Fleets;
 using FlightControl.Dto.Licenses;
+using FlightControl.Dto.Permits;
+using FlightControl.Repository;
+using FlightControl.Repository.Interfaces;
+using FlightControl.Repository.Repositories;
+using FlightControl.Validation.Core;
+using FlightControl.Validation.Validators.Airspace;
+using FlightControl.Validation.Validators.Fleets;
 using FlightControl.Validation.Validators.Licenses;
-
+using FlightControl.Validation.Validators.Permits;
+using FlightControl.Validation.Validators.Users;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// MVC and Swagger
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -49,10 +59,11 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Database
+
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string "
-        + "'DefaultConnection' not found.");
+        ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
@@ -60,6 +71,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 
 // Unit of work and repositories
+
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -67,8 +79,14 @@ builder.Services.AddScoped<IAircraftRepository, AircraftRepository>();
 builder.Services.AddScoped<IAircraftStatusChangeRepository, AircraftStatusChangeRepository>();
 builder.Services.AddScoped<IFleetRepository, FleetRepository>();
 builder.Services.AddScoped<IFleetMembershipRepository, FleetMembershipRepository>();
+builder.Services.AddScoped<IPilotLicenseRepository, PilotLicenseRepository>();
+builder.Services.AddScoped<ILicenseCategoryRepository, LicenseCategoryRepository>();
+builder.Services.AddScoped<IAirspaceZoneRepository, AirspaceZoneRepository>();
+builder.Services.AddScoped<IFlightPermitRequestRepository, FlightPermitRequestRepository>();
+builder.Services.AddScoped<IPermitCheckResultRepository, PermitCheckResultRepository>();
 
 // Security
+
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<ITokenService, TokenService>();
@@ -76,9 +94,11 @@ builder.Services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 // Validators
+
 builder.Services.AddSingleton<AbstractValidator<RegisterRequest>, RegisterRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<LoginRequest>, LoginRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<ChangePasswordRequest>, ChangePasswordRequestValidator>();
+
 builder.Services.AddSingleton<AbstractValidator<CreateAircraftRequest>, CreateAircraftRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<UpdateAircraftRequest>, UpdateAircraftRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<ChangeAircraftStatusRequest>, ChangeAircraftStatusRequestValidator>();
@@ -86,40 +106,60 @@ builder.Services.AddSingleton<AbstractValidator<AircraftQuery>, AircraftQueryVal
 builder.Services.AddSingleton<AbstractValidator<CreateFleetRequest>, CreateFleetRequestValidator>();
 builder.Services.AddSingleton<AbstractValidator<AddFleetMemberRequest>, AddFleetMemberRequestValidator>();
 
+builder.Services.AddSingleton<AbstractValidator<CreateLicenseRequest>, CreateLicenseRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<UpdateLicenseRequest>, UpdateLicenseRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<SuspendLicenseRequest>, SuspendLicenseRequestValidator>();
+
+builder.Services.AddSingleton<AbstractValidator<AirspaceZoneRequest>, AirspaceZoneRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<ZonesAtPointQuery>, ZonesAtPointQueryValidator>();
+
+builder.Services.AddSingleton<AbstractValidator<CreatePermitRequest>, CreatePermitRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<PermitQuery>, PermitQueryValidator>();
+builder.Services.AddSingleton<AbstractValidator<ApprovePermitRequest>, ApprovePermitRequestValidator>();
+builder.Services.AddSingleton<AbstractValidator<RejectPermitRequest>, RejectPermitRequestValidator>();
+
+// Pre-check rules (all registrations are injected together as IEnumerable<IPermitRule>)
+
+builder.Services.AddSingleton<IPermitRule, LicenseRule>();
+builder.Services.AddSingleton<IPermitRule, AircraftRule>();
+builder.Services.AddSingleton<IPermitRule, AirspaceRule>();
+builder.Services.AddSingleton<IPermitRule, ConflictRule>();
+
 // Operations
+
 builder.Services.AddScoped<IAuthOperation, AuthOperation>();
 builder.Services.AddScoped<IUserOperation, UserOperation>();
 builder.Services.AddScoped<IAircraftOperation, AircraftOperation>();
 builder.Services.AddScoped<IFleetOperation, FleetOperation>();
-
-builder.Services.AddScoped<IPilotLicenseRepository, PilotLicenseRepository>();
-builder.Services.AddScoped<ILicenseCategoryRepository, LicenseCategoryRepository>();
-builder.Services.AddSingleton<AbstractValidator<CreateLicenseRequest>, CreateLicenseRequestValidator>();
-builder.Services.AddSingleton<AbstractValidator<UpdateLicenseRequest>, UpdateLicenseRequestValidator>();
-builder.Services.AddSingleton<AbstractValidator<SuspendLicenseRequest>, SuspendLicenseRequestValidator>();
 builder.Services.AddScoped<ILicenseOperation, LicenseOperation>();
+builder.Services.AddScoped<IAirspaceZoneOperation, AirspaceZoneOperation>();
+builder.Services.AddScoped<IFlightPermitOperation, FlightPermitOperation>();
 
 // Seeding
+
 builder.Services.AddScoped<AuthoritySeeder>();
+
+// Options
 
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection("Jwt"))
     .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer), "Issuer can't be null or empty.")
     .Validate(o => !string.IsNullOrWhiteSpace(o.Audience), "Audience can't be null or empty.")
-    .Validate(o => Encoding.UTF8.GetBytes(o.SigningKey).Length >= 32, "Key must be longer than 256 bits(32 bytes).")
-    .Validate(o => o.AccessTokenMinutes >= 1 
-    && o.AccessTokenMinutes <= 20160, "Access time must be between 1 and 20160 minutes.")
+    .Validate(o => Encoding.UTF8.GetBytes(o.SigningKey).Length >= 32, "Key must be longer than 256 bits (32 bytes).")
+    .Validate(o => o.AccessTokenMinutes is >= 1 and <= 20160, "Access time must be between 1 and 20160 minutes.")
     .ValidateOnStart();
-
-var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
-    ?? throw new InvalidOperationException("Configuration section 'Jwt' is missing.");
 
 builder.Services.AddOptions<RefreshTokenOptions>()
     .Bind(builder.Configuration.GetSection("RefreshToken"))
-    .Validate(o => o.AbsoluteLifetimeDays >= o.SlidingLifetimeDays, "Sliding time can't be bigger than absolute")
-    .Validate(o => o.AbsoluteLifetimeDays <= 90, "Max life time of a token can be 90 days")
-    .Validate(o => o.SlidingLifetimeDays >= 1, "Sliding time can't be lower than 1")
+    .Validate(o => o.AbsoluteLifetimeDays >= o.SlidingLifetimeDays, "Sliding time can't be bigger than absolute.")
+    .Validate(o => o.AbsoluteLifetimeDays <= 90, "Max life time of a token can be 90 days.")
+    .Validate(o => o.SlidingLifetimeDays >= 1, "Sliding time can't be lower than 1.")
     .ValidateOnStart();
+
+// Authentication and authorization
+
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Configuration section 'Jwt' is missing.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -148,9 +188,9 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-
 var app = builder.Build();
 
+// Seed the authority account
 
 var seedEmail = app.Configuration["Seed:AuthorityEmail"];
 var seedPassword = app.Configuration["Seed:AuthorityPassword"];
@@ -166,11 +206,10 @@ else
     await seeder.SeedAsync(seedEmail, seedPassword);
 }
 
+// HTTP pipeline
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -181,6 +220,5 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
 
 app.Run();

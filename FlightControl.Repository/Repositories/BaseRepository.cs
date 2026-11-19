@@ -38,4 +38,8 @@ public class BaseRepository<T> : IBaseRepository<T> where T : BaseEntity
     {
         _dbSet.Remove(entity);
     }
+    public async Task<IReadOnlyList<T>> GetByIdsAsync(IEnumerable<Guid> ids)
+    {
+        return await _dbSet.Where(e => ids.Contains(e.Id)).ToListAsync();
+    }
 }

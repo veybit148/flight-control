@@ -19,6 +19,7 @@ public class LicenseOperation : ILicenseOperation
     private readonly IPilotLicenseRepository _licenseRepository;
     private readonly ILicenseCategoryRepository _categoryRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IFlightPermitRequestRepository _permitRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
 
@@ -29,6 +30,7 @@ public class LicenseOperation : ILicenseOperation
         IPilotLicenseRepository licenseRepository,
         ILicenseCategoryRepository categoryRepository,
         IUserRepository userRepository,
+        IFlightPermitRequestRepository permitRepository,
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser)
     {
@@ -38,6 +40,7 @@ public class LicenseOperation : ILicenseOperation
         _licenseRepository = licenseRepository;
         _categoryRepository = categoryRepository;
         _userRepository = userRepository;
+        _permitRepository = permitRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
     }
@@ -131,6 +134,12 @@ public class LicenseOperation : ILicenseOperation
     public async Task DeleteAsync(Guid id)
     {
         PilotLicense license = await GetAccessibleLicenseAsync(id, allowAuthority: false);
+
+        // Permit requests reference the license (restrict) and are never deleted.
+        if (await _permitRepository.ExistsByLicenseIdAsync(license.Id))
+        {
+            throw new ConflictException("This license has permit requests and can't be deleted.");
+        }
 
         _licenseRepository.Delete(license);
         await _unitOfWork.SaveChangesAsync();

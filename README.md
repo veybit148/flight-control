@@ -76,6 +76,14 @@ dotnet ef database update -p FlightControl.Dal -s FlightControl.Api
 dotnet run --project FlightControl.Api
 ```
 
+## Running the tests
+
+```bash
+dotnet test
+```
+
+Run it from the repository root. The tests (xUnit, FluentAssertions) cover the permit pre-check rules, permit state transitions and the geometry helpers; they need neither Docker nor a database.
+
 ## Swagger Address
 
 http://localhost:5288/swagger/index.html
@@ -128,6 +136,44 @@ Accounts registered with the `Military` role cannot log in until the authority a
 | POST | `/api/fleets/{id}/members` | FleetOwner, Military (owner only) |
 | GET | `/api/fleets/{id}/members` | Authenticated (owner or authority) |
 | DELETE | `/api/fleets/{id}/members/{pilotId}` | FleetOwner, Military (owner only) |
+
+### Licenses
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/licenses` | Pilot |
+| GET | `/api/licenses` | Authenticated (pilots see their own, the authority sees all) |
+| GET | `/api/licenses/{id}` | Authenticated (owner or authority) |
+| PUT | `/api/licenses/{id}` | Pilot (owner only; expiry and categories, the number cannot change) |
+| DELETE | `/api/licenses/{id}` | Pilot (owner only; 409 if any permit request uses it) |
+| POST | `/api/licenses/{id}/suspend` | Authority |
+| POST | `/api/licenses/{id}/reinstate` | Authority |
+
+Deleting an aircraft that is used by any permit request also returns 409.
+
+### Airspace zones
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/airspace-zones` | Authority |
+| GET | `/api/airspace-zones` | Authenticated |
+| GET | `/api/airspace-zones/{id}` | Authenticated |
+| PUT | `/api/airspace-zones/{id}` | Authority |
+| DELETE | `/api/airspace-zones/{id}` | Authority |
+| GET | `/api/airspace-zones/at-point?latitude=...&longitude=...&altitudeMeters=...&at=...` | Authenticated |
+
+### Permits
+
+| Method | Route | Required role |
+| --- | --- | --- |
+| POST | `/api/permits` | Pilot, FleetOwner, Military (type follows the role: Individual, Fleet, Military) |
+| GET | `/api/permits?status=&type=&from=&to=&sort=&page=&pageSize=` | Authenticated (requesters see their own, the authority sees all; `sort=militaryFirst`) |
+| GET | `/api/permits/{id}` | Authenticated (requester or authority) |
+| POST | `/api/permits/{id}/cancel` | Pilot, FleetOwner, Military (requester only, while pending) |
+| POST | `/api/permits/{id}/approve` | Authority (409 if a pre-check fails; a note is required if one warns) |
+| POST | `/api/permits/{id}/reject` | Authority (reason required) |
+
+Pre-checks (license, aircraft, airspace, conflicts) run when a request is created and again when it is approved; the latest report is returned in `checks`.
 
 ### Health
 

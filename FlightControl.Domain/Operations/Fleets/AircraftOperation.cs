@@ -22,6 +22,7 @@ public class AircraftOperation : IAircraftOperation
     private readonly IAircraftStatusChangeRepository _statusChangeRepository;
     private readonly IFleetRepository _fleetRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IFlightPermitRequestRepository _permitRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
 
@@ -34,6 +35,7 @@ public class AircraftOperation : IAircraftOperation
         IAircraftStatusChangeRepository statusChangeRepository,
         IFleetRepository fleetRepository,
         IUserRepository userRepository,
+        IFlightPermitRequestRepository permitRepository,
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser)
     {
@@ -45,6 +47,7 @@ public class AircraftOperation : IAircraftOperation
         _statusChangeRepository = statusChangeRepository;
         _fleetRepository = fleetRepository;
         _userRepository = userRepository;
+        _permitRepository = permitRepository;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
     }
@@ -173,6 +176,12 @@ public class AircraftOperation : IAircraftOperation
     public async Task DeleteAsync(Guid id)
     {
         Aircraft aircraft = await GetAccessibleAircraftAsync(id, allowAuthority: false);
+
+        // Permit requests reference the aircraft (restrict) and are never deleted.
+        if (await _permitRepository.ExistsByAircraftIdAsync(aircraft.Id))
+        {
+            throw new ConflictException("This aircraft has permit requests and can't be deleted.");
+        }
 
         _aircraftRepository.Delete(aircraft);
         await _unitOfWork.SaveChangesAsync();

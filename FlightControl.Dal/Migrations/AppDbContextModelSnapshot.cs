@@ -4,6 +4,7 @@ using FlightControl.Dal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
@@ -115,6 +116,53 @@ namespace FlightControl.Dal.Migrations
                     b.ToTable("AircraftStatusChanges");
                 });
 
+            modelBuilder.Entity("FlightControl.Dal.Entities.AirspaceZone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ActiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ActiveUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Polygon>("Area")
+                        .IsRequired()
+                        .HasColumnType("geography (Polygon, 4326)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("MaxAltitudeMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MinAltitudeMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Area");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Area"), "gist");
+
+                    b.ToTable("AirspaceZones");
+                });
+
             modelBuilder.Entity("FlightControl.Dal.Entities.Fleet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -171,6 +219,101 @@ namespace FlightControl.Dal.Migrations
                     b.ToTable("FleetMemberships");
                 });
 
+            modelBuilder.Entity("FlightControl.Dal.Entities.FlightPermitRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AircraftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Polygon>("Area")
+                        .IsRequired()
+                        .HasColumnType("geography (Polygon, 4326)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("FleetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LicenseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("MaxAltitudeMeters")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("PilotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PlannedEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PlannedStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AircraftId");
+
+                    b.HasIndex("Area");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Area"), "gist");
+
+                    b.HasIndex("DecidedById");
+
+                    b.HasIndex("LicenseId");
+
+                    b.HasIndex("PilotId");
+
+                    b.HasIndex("RequesterId");
+
+                    b.HasIndex("Status", "PlannedStart");
+
+                    b.ToTable("FlightPermitRequests");
+                });
+
             modelBuilder.Entity("FlightControl.Dal.Entities.LicenseCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -197,6 +340,43 @@ namespace FlightControl.Dal.Migrations
                         .IsUnique();
 
                     b.ToTable("LicenseCategories");
+                });
+
+            modelBuilder.Entity("FlightControl.Dal.Entities.PermitCheckResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("PermitRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RuleName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PermitRequestId");
+
+                    b.ToTable("PermitCheckResults");
                 });
 
             modelBuilder.Entity("FlightControl.Dal.Entities.PilotLicense", b =>
@@ -378,11 +558,52 @@ namespace FlightControl.Dal.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FlightControl.Dal.Entities.FlightPermitRequest", b =>
+                {
+                    b.HasOne("FlightControl.Dal.Entities.Aircraft", null)
+                        .WithMany()
+                        .HasForeignKey("AircraftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FlightControl.Dal.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FlightControl.Dal.Entities.PilotLicense", null)
+                        .WithMany()
+                        .HasForeignKey("LicenseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FlightControl.Dal.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("PilotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FlightControl.Dal.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FlightControl.Dal.Entities.LicenseCategory", b =>
                 {
                     b.HasOne("FlightControl.Dal.Entities.PilotLicense", null)
                         .WithMany()
                         .HasForeignKey("LicenseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FlightControl.Dal.Entities.PermitCheckResult", b =>
+                {
+                    b.HasOne("FlightControl.Dal.Entities.FlightPermitRequest", null)
+                        .WithMany()
+                        .HasForeignKey("PermitRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

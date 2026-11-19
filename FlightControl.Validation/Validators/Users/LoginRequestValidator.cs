@@ -1,5 +1,4 @@
 using FlightControl.Dto.Auth;
-using FlightControl.Dto.Users;
 using FlightControl.Validation.Core;
 
 namespace FlightControl.Validation.Validators.Users;

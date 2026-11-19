@@ -291,6 +291,114 @@ Design decisions made in this project, including places where it intentionally d
 
 **Known limitation:** Access tokens already issued, including ones held by an attacker, stay valid until they expire (at most 15 minutes, `Jwt:AccessTokenMinutes`). Closing this gap would need a per-user security stamp in the token, checked against the database on every request.
 
+## 30. Pilot licenses
+
+**Date:** 2026-11-16
+
+**Decision:**
+
+- A pilot registers their own licenses. The aircraft categories a license covers are stored as rows in a separate `LicenseCategory` table, with a unique index on `(LicenseId, Category)`; deleting a license deletes its categories (cascade).
+- License numbers are trimmed, converted to upper case and unique. They cannot be changed after creation: `PUT /api/licenses/{id}` only changes the expiry date and the categories.
+- `LicenseStatus` has only `Valid` and `Suspended`. Whether a license is expired is computed from `ExpiresAt` wherever it matters (the license pre-check, item 33), not stored as a status.
+- Only the authority suspends and reinstates licenses. A reason is required to suspend; it is stored on the license itself (`SuspensionReason`) and cleared on reinstatement.
+
+**Reason:** A category list on the license row (for example a comma-separated string) could not be indexed or queried and would need parsing everywhere; a separate table keeps each category a proper value. A license number identifies a document issued by someone else, so changing it would make it a different license; a mistyped number is fixed by deleting the license and creating it again. An `Expired` status would have to be updated by a background job at the exact moment of expiry and would be wrong in between; comparing with `ExpiresAt` is always correct. Only the current suspension matters for permits, so a single reason column is enough.
+
+**Known limitations:**
+
+- Suspensions are not kept as history; reinstating a license clears its reason.
+- `LicenseResponse.Status` shows `Valid` for an expired license; clients must compare `ExpiresAt` themselves.
+
+## 31. Airspace zones
+
+**Date:** 2026-11-18
+
+**Decision:**
+
+- Zone areas are stored as `geography (Polygon, 4326)` with a GiST index. Distances and intersections are therefore computed on the earth's surface, in meters, without a projection.
+- `MinAltitudeMeters` and `MaxAltitudeMeters` are above ground level (AGL). Every altitude in the system (zones, aircraft limits, permit requests) uses this reference, so they can be compared directly.
+- A zone has one optional active period (`ActiveFrom` and `ActiveUntil`, each nullable). A missing bound means "always" on that side.
+- Polygons arrive in requests as a list of `{ latitude, longitude }` objects and leave in responses in the same form. `Geo.CreatePolygon` converts them to coordinates (longitude as X, latitude as Y) and closes the ring if the last point differs from the first. The validator requires at least three distinct corners, valid ranges, and a polygon whose edges do not cross.
+- "Zones at a point" uses `Covers` instead of `Contains`. PostGIS has no `ST_Contains` for `geography`, and `ST_Covers` also counts points on the border as inside, which is the safe choice for airspace.
+
+**Reason:** Named fields cannot be swapped by mistake, while an array such as `[29.0, 41.0]` is read as latitude-first by some clients and longitude-first by others; the order is converted in exactly one place. Requiring the client to repeat the first point is a common source of invalid polygons and adds nothing. AGL is what pilots of drones and light aircraft fly by; mixing it with sea-level altitudes would make every comparison wrong over high ground. A single period covers temporary restrictions (an event, an exercise) without a scheduling model.
+
+**Known limitations:**
+
+- Recurring restrictions (for example "weekdays 08:00 to 18:00") need one zone per occurrence.
+- Terrain is not modeled; an AGL limit is applied as if the ground were flat across the zone.
+
+## 32. Permit requests
+
+**Date:** 2026-11-18
+
+**Decision:**
+
+- `FlightPermitRequest` has foreign keys but no navigation properties. Operations load related data (aircraft, licenses, user names, check results) with batched queries (`GetByIdsAsync`, `GetByPermitIdsAsync`), so a page of requests costs a fixed number of queries. This deliberately deviates from the task document, which asks for `Include`.
+- Fleet and military requests follow a strict fleet rule: the aircraft must be assigned to one of the requester's fleets (item 19), and the pilot of the chosen license must be a member of that same fleet.
+- `PilotId` and `FleetId` are copied onto the request when it is created. `PilotId` has a foreign key; `FleetId` has none, so deleting a fleet does not touch the requests made through it.
+- The status machine lives in the entity: `Approve`, `Reject` and `Cancel` check that the request is pending and record who decided, when and why. All of these properties have private setters, so no operation can change them any other way. An invalid transition throws `InvalidStateTransitionException`, which the middleware maps to 409.
+- Requests are never deleted; a requester cancels a pending request instead. Aircraft and licenses that any request references (restrict) cannot be deleted either: the operation checks first and returns 409 with a clear message instead of letting the database reject the delete with a 500.
+
+**Reason:** Navigation properties invite `Include` chains that load whole object graphs and make it unclear which data a query actually reads; explicit batched queries keep every database round trip visible in the operation. The fleet rule ensures that a fleet owner can only send their own pilots in their own aircraft. A permit is a record of what was approved for whom; snapshots keep it accurate after a pilot leaves a fleet or a fleet is deleted. Keeping transitions in the entity means the rules cannot be bypassed by setting a property, and they can be tested without a database (item 36).
+
+**Known limitation:** A request keeps referencing its aircraft and license, so an operator can never delete an aircraft or license that has been used, even after all its requests are decided. Retiring them instead of deleting would solve this (see also item 22).
+
+## 33. Pre-check rules
+
+**Date:** 2026-11-19
+
+**Decision:**
+
+- Each check is one class implementing `IPermitRule` (`LicenseRule`, `AircraftRule`, `AirspaceRule`, `ConflictRule`), registered in DI. The operation loads everything a rule needs into a `PermitCheckContext` (the request, aircraft, license, license categories, intersecting active zones, overlapping approved requests) and runs every registered rule against it. Rules read only the context: no database, no current time.
+- Each rule returns one `RuleResult` with an outcome of `Passed`, `Warning` or `Failed`. The worst finding decides the outcome, and every finding goes into the description.
+- Findings and their severity:
+
+  | Rule | Failed | Warning |
+  | --- | --- | --- |
+  | License | suspended; expires before the flight ends; does not cover the aircraft's category | expires within 30 days after the flight |
+  | Aircraft | grounded; in maintenance; maintenance due before the flight ends; requested altitude above the aircraft's limit | maintenance due within 7 days after the flight |
+  | Airspace | enters a restricted zone; enters a military zone (non-military requests only) | enters a controlled zone; flies above the upper limit of a non-free zone |
+  | Conflict | the same aircraft or the same pilot has an approved request at overlapping times | other approved flights use the same area at overlapping times |
+
+  A zone whose floor is at or above the flight's maximum altitude is ignored, because flights start at ground level.
+- Rules run when a request is created and again when the authority approves it, because zones, licenses, aircraft and other approvals may have changed in between. The new report replaces the old one and is saved even when the approval is refused, so the authority sees why. A request that is no longer pending is not checked again and keeps the report it was decided with.
+
+**Reason:** One class per rule keeps each rule small, and adding a rule means adding a class and one DI line. Feeding rules a prepared context keeps them pure, so they are tested with plain objects (item 36). Three outcomes separate what must block a flight from what an authority should look at but may accept.
+
+## 34. Authority decisions on permit requests
+
+**Date:** 2026-11-19
+
+**Decision:**
+
+- `POST /api/permits/{id}/approve` refuses with 409 if any pre-check fails. If a pre-check warns, a note is required (400 with a field error on `Note`); otherwise the note is optional.
+- `POST /api/permits/{id}/reject` always requires a reason, stored as the decision note.
+- Both are restricted to the authority. The authority sees every request; requesters see only their own (404 for others, as in item 21).
+- `GET /api/permits?sort=militaryFirst` lists military requests first, then by planned start; the default order is by planned start.
+
+**Reason:** A failed check describes a flight that must not happen, so no note can override it. A warning is a judgment call, and the note records why the authority accepted the risk. A rejection without a reason leaves the requester unable to fix their request. Military requests are usually time-critical, so the authority can see them first.
+
+## 35. Optimistic concurrency on permit requests
+
+**Date:** 2026-11-19
+
+**Decision:** `FlightPermitRequest.Version` is mapped to PostgreSQL's `xmin` system column as a row version. Every update includes the value that was read in its `WHERE` clause; if the row changed in between, EF Core throws `DbUpdateConcurrencyException`, which the middleware maps to 409 ("The record was changed by someone else. Reload it and try again.").
+
+**Reason:** Two authorities deciding the same request at the same time, or a requester cancelling while it is being approved, must not both succeed. `xmin` changes on every update without an extra column or any code to maintain it. This is the mechanism item 13 postponed; refresh tokens do not use it yet.
+
+**Known limitation:** The check protects a single row. Two different requests for the same aircraft or pilot at overlapping times can still both be approved if they are approved at the same moment: each conflict check sees the other request as still pending. Closing this would need a serializable transaction, a lock per aircraft and pilot, or an exclusion constraint in the database.
+
+## 36. Tests
+
+**Date:** 2026-11-19
+
+**Decision:** `FlightControl.Tests` uses xUnit with FluentAssertions pinned to 7.2.2; version 8 changed to a commercial license. The pre-check rules, `RuleResult`, the permit state transitions and the `Geo` helpers are tested without a database: a `TestData` helper builds valid objects with fixed dates, and each test changes only what it checks.
+
+**Reason:** The rules and transitions hold the most important business logic and are pure by design (items 32 and 33), so they can be tested quickly and reliably. Fixed dates keep the results independent of when the tests run.
+
+**Known limitation:** Operations, repositories and spatial queries (`Covers`, `Intersects`) are not tested; they need a real PostgreSQL database with PostGIS, for example through Testcontainers.
+
 
 
 

@@ -15,7 +15,9 @@ public class AppDbContext : DbContext
     public DbSet<AircraftStatusChange> AircraftStatusChanges => Set<AircraftStatusChange>();
     public DbSet<PilotLicense> PilotLicenses => Set<PilotLicense>();
     public DbSet<LicenseCategory> LicenseCategories => Set<LicenseCategory>();
-    
+    public DbSet<AirspaceZone> AirspaceZones => Set<AirspaceZone>();
+    public DbSet<FlightPermitRequest> FlightPermitRequests => Set<FlightPermitRequest>();
+    public DbSet<PermitCheckResult> PermitCheckResults => Set<PermitCheckResult>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)

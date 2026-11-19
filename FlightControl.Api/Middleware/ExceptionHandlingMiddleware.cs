@@ -1,6 +1,8 @@
 using FlightControl.Validation.Core;
 using FlightControl.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
+using FlightControl.Dal.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace FlightControl.Api.Middleware;
 
@@ -70,8 +72,30 @@ public class ExceptionHandlingMiddleware
             };
             await WriteProblemAsync(context, problem);
         }
+        
+        catch(InvalidStateTransitionException ex)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Conflict Occurred",
+                Detail = ex.Message
+            };
+            await WriteProblemAsync(context, problem);
+        }
 
-        catch (NotFoundException ex)
+        catch(DbUpdateConcurrencyException)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Conflict Occurred",
+                Detail = "The record was changed by someone else. Reload it and try again."
+            };
+            await WriteProblemAsync(context, problem);
+        }
+
+        catch(NotFoundException ex)
         {
             var problem = new ProblemDetails
             {

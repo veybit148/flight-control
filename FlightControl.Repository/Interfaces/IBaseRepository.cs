@@ -9,5 +9,5 @@ public interface IBaseRepository<T> where T : BaseEntity
     void Add(T entity);
     void Update(T entity);
     void Delete(T entity);
-
+    Task<IReadOnlyList<T>> GetByIdsAsync(IEnumerable<Guid> ids);    
 }
