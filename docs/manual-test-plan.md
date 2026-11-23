@@ -86,8 +86,6 @@ Optional: `GET /api/airspace-zones/at-point?latitude=41.01&longitude=29.01&altit
 }
 ```
 
-`role` is sent as a number: `0` = Pilot, `1` = FleetOwner, `2` = Military. The text value `"Pilot"` is rejected with 400 because the API has no string enum converter.
-
 **Expect 201.** Check: `role` is `"Pilot"` and `status` is `"Active"`.
 
 ## 4. Pilot logs in
